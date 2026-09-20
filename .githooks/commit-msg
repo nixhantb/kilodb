@@ -1,0 +1,40 @@
+#!/bin/sh
+# Enforces: "KILO-<number>: <message>" with <number> incrementing by 1
+# from the highest KILO-<number> already in this branch's history.
+#
+# Installed via: git config core.hooksPath .githooks
+
+msg_file="$1"
+first_line=$(head -n 1 "$msg_file")
+
+# Allow merge commits through untouched.
+case "$first_line" in
+  "Merge "*) exit 0 ;;
+esac
+
+pattern='^KILO-([0-9]+): .+'
+
+if ! echo "$first_line" | grep -qE "$pattern"; then
+  echo "ERROR: commit message must start with 'KILO-<number>: ' followed by a message."
+  echo "  Got:      $first_line"
+  echo "  Expected: KILO-<number>: <message>"
+  echo "  Example:  KILO-06: add BufferPool LRU eviction"
+  exit 1
+fi
+
+got_num=$(echo "$first_line" | sed -E "s/$pattern/\1/")
+
+last_num=$(git log --pretty=%s 2>/dev/null | grep -oE '^KILO-[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1)
+last_num=${last_num:-0}
+expected_num=$((10#$last_num + 1))
+
+# Compare numerically, ignoring leading zeros.
+if [ "$((10#$got_num))" -ne "$expected_num" ]; then
+  padded=$(printf "%02d" "$expected_num")
+  echo "ERROR: KILO number out of sequence."
+  echo "  Got:      KILO-$got_num"
+  echo "  Expected: KILO-$padded (last used was KILO-$last_num)"
+  exit 1
+fi
+
+exit 0
